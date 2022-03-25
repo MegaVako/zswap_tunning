@@ -13,18 +13,26 @@ declare -a ZSWAP_ZPOOLS=("zbud", "z3fold", "zsmalloc")
 # 5
 declare -a ZSWAP_COMPRESSORS=("lzo", "lz4", "lz4hc", "deflate", "842")
 
-declare -a TESTS=("tailbench" "ycsb" "memtier")
+declare -a SIMPLE_TESTS=("ycsb" "memtier")
 
 CURR_DIR=`pwd`
 MEM_BENCH_DIR="home/yans3/benchmarks/memsys-benchmarking"
+REDIS_DIR=${MEM_BENCH_DIR}/tools/redis/src
 
+# $1 = configuration str, used for saving results
 run_test() {
-  for TEST in "${TESTS[@]}"; do
-    # start collecting statistic
+  for TEST in "${SIMPLE_TESTS[@]}"; do
+    # Redis setup
+    sudo rm -f ${REDIS_DIR}/*.rdb; sudo rm -f ./*.rdb; sudo rm -f ../*.rdb; sleep 4
+    ${REDIS_DIR}/redis-server & sleep 15
 
     cd "${MEM_BENCH_DIR}/${TEST}"
-    ./run.sh
+    ./run_${TEST}.sh
+    cp ${TEST}-results.txt $1
 
+    # Redis reset
+    ${REDIS_DIR}/redis-cli FLUSHALL
+    sudo pkill -9 redis-server & sleep 4
   done
 }
 
@@ -45,19 +53,19 @@ run_baseline() {
         swapon /swap_file & sleep 3
 
         # run test
-        run_test
+        run_test "${CURR_DIR}/${config_str}"
     done
   done
 }
 # zswap model, w/ zswap
 run_zswap() {
-
   for WATERMARK_CONFIG in "${WATERMARK_CONFIGS[@]}"; do
     for SWAPPINESS_CONFIG in "${SWAPPINESS_CONFIGS[@]}"; do
       for MAX_POOL_PERCENT in "${ZSWAP_MAX_POOL_PERCENTS[@]}"; do
         for THRESHOLD in "${ZSWAP_ACCEPT_THRESHOLDS[@]}"; do
           for ZPOOL in "${ZSWAP_ZPOOLS[@]}"; do
             for COMPRESSOR in "${ZSWAP_COMPRESSORS[@]}"; do
+
                 config_str="zswap/${WATERMARK_CONFIG}/${SWAPPINESS_CONFIG}/${MAX_POOL_PERCENT}/${THRESHOLD}/${ZPOOL}/${COMPRESSOR}"
                 echo "[tittle]/${config_str}"
                 echo ""
@@ -72,7 +80,7 @@ run_zswap() {
                 echo 1 > /sys/module/zswap/parameters/enabled & sleep 3
 
                 # run test
-                run_test config_str;
+                run_test "${CURR_DIR}/${config_str}"
             done
           done
         done
@@ -82,4 +90,4 @@ run_zswap() {
 }
 
 run_baseline;
-run_zswap;
+#run_zswap;

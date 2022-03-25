@@ -1,1 +1,2 @@
-echo 1 > /sys/module/zswap/parameters/enabled
+sudo sh ./zswap_disable.sh;
+sudo sh ./zswap_en.sh;
